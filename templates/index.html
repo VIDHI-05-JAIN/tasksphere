@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskSphere — Deadline Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="board-header">
+  <div class="header-left">
+    <span class="logo-mark">◆</span>
+    <div>
+      <h1>TaskSphere</h1>
+      <p class="tagline">Deadline Board</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="clock" id="liveClock">--:--:--</div>
+    <div class="clock-label">Local Time</div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <section class="panel deadlines-panel">
+    <div class="panel-title">
+      <span>🔔 Upcoming Deadlines</span>
+    </div>
+    <div id="deadlinesList" class="deadlines-list">
+      <!-- populated by script.js -->
+    </div>
+  </section>
+
+  <section class="panel form-panel">
+    <div class="panel-title"><span id="formTitle">＋ New Task</span></div>
+    <form id="taskForm">
+      <input type="hidden" id="taskId" value="">
+      <label>Title
+        <input type="text" id="title" placeholder="e.g. DevOps VLE Submission" required>
+      </label>
+      <label>Description <span class="optional">optional</span>
+        <textarea id="description" rows="2" placeholder="Details..."></textarea>
+      </label>
+      <div class="row-2">
+        <label>Due date & time
+          <input type="datetime-local" id="dueAt" required>
+        </label>
+        <label>Remind me
+          <select id="reminderOffset">
+            <option value="10_min">10 minutes before</option>
+            <option value="1_hour">1 hour before</option>
+            <option value="1_day" selected>1 day before</option>
+            <option value="3_days">3 days before</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="submitBtn">Add Task</button>
+        <button type="button" class="btn btn-ghost" id="cancelEditBtn" style="display:none;">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel board-panel">
+    <div class="panel-title">
+      <span>All Tasks</span>
+      <div class="filter-tabs" id="filterTabs">
+        <button class="tab active" data-filter="all">All</button>
+        <button class="tab" data-filter="active">Active</button>
+        <button class="tab" data-filter="completed">Completed</button>
+      </div>
+    </div>
+    <div class="split-board" id="taskBoard">
+      <div class="board-row board-row-head">
+        <span>Status</span>
+        <span>Task</span>
+        <span>Due</span>
+        <span>Reminder</span>
+        <span>Actions</span>
+      </div>
+      <div id="taskRows"></div>
+    </div>
+    <p class="empty-state" id="emptyState" style="display:none;">No tasks yet. Add one above to open the board.</p>
+  </section>
+
+</main>
+
+<footer class="board-footer">
+  <span>TaskSphere · Cloud &amp; DevOps Project · Flask + SQLite · Reminder status computed on read, no scheduler</span>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
