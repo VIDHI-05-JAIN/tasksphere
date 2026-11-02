@@ -18,7 +18,14 @@ let currentFilter = "all";
 let editingId = null;
 
 const el = (id) => document.getElementById(id);
-
+// Browser picks local time; server compares in UTC. Convert at the edges.
+function localToUtc(localValue) {
+  return new Date(localValue).toISOString().slice(0, 16);
+}
+function utcToLocal(utcValue) {
+  const d = new Date(utcValue + "Z");
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -124,7 +131,7 @@ function editTask(id) {
   el("taskId").value = id;
   el("title").value = task.title;
   el("description").value = task.description || "";
-  el("dueAt").value = task.due_at.slice(0, 16);
+  el("dueAt").value = utcToLocal(task.due_at);
   el("reminderOffset").value = task.reminder_offset;
   el("formTitle").textContent = "✎ Edit Task";
   el("submitBtn").textContent = "Save Changes";
@@ -146,7 +153,7 @@ el("taskForm").addEventListener("submit", async (e) => {
   const payload = {
     title: el("title").value.trim(),
     description: el("description").value.trim(),
-    due_at: el("dueAt").value,
+    due_at: localToUtc(el("dueAt").value),
     reminder_offset: el("reminderOffset").value,
   };
   try {
