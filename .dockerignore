@@ -1,0 +1,14 @@
+.git
+.github
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+venv/
+.vscode/
+deploy/
+cloudwatch/
+terraform/
+ansible/
+k8s/
+test_app.py

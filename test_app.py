@@ -30,7 +30,23 @@ def test_healthz(client):
     assert res.status_code == 200
     assert res.get_json()["status"] == "ok"
 
+def test_health_endpoint(client):
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "ok"
 
+
+def test_metrics_endpoint(client):
+    due = iso(datetime.utcnow() + timedelta(days=1))
+    client.post("/api/tasks", json={"title": "Metric task", "due_at": due})
+    client.get("/health")
+    res = client.get("/metrics")
+    assert res.status_code == 200
+    body = res.get_data(as_text=True)
+    assert "tasksphere_http_requests_total" in body
+    assert 'tasksphere_tasks{status="due_soon"}' in body
+    
+    
 def test_index_page_loads(client):
     res = client.get("/")
     assert res.status_code == 200

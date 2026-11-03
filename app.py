@@ -1,8 +1,16 @@
 import os
 import sqlite3
+import time
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, render_template, g
-
+from flask import Flask, request, jsonify, render_template, g, Response
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    CollectorRegistry,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +22,42 @@ REMINDER_OFFSETS = {
     "1_day": timedelta(days=1),
     "3_days": timedelta(days=3),
 }
+# ---------- Prometheus metrics ----------
+REGISTRY = CollectorRegistry()
+REQUEST_COUNT = Counter(
+    "tasksphere_http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"],
+    registry=REGISTRY,
+)
+REQUEST_LATENCY = Histogram(
+    "tasksphere_http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["endpoint"],
+    registry=REGISTRY,
+)
+TASKS_BY_STATUS = Gauge(
+    "tasksphere_tasks",
+    "Number of tasks by reminder status",
+    ["status"],
+    registry=REGISTRY,
+)
+STATUSES = ["overdue", "due_soon", "upcoming", "scheduled", "completed"]
 
+
+@app.before_request
+def _start_timer():
+    g._start = time.perf_counter()
+
+
+@app.after_request
+def _record_metrics(response):
+    if request.path != "/metrics":
+        endpoint = request.url_rule.rule if request.url_rule else "unmatched"
+        elapsed = time.perf_counter() - getattr(g, "_start", time.perf_counter())
+        REQUEST_COUNT.labels(request.method, endpoint, response.status_code).inc()
+        REQUEST_LATENCY.labels(endpoint).observe(elapsed)
+    return response
 
 def get_db():
     if "db" not in g:
@@ -208,10 +251,23 @@ def delete_task(task_id):
     return jsonify({"deleted": task_id})
 
 
+# /health is used by Kubernetes probes and Jenkins; /healthz kept for compatibility
+@app.route("/health")
 @app.route("/healthz")
-def healthz():
+def health():
     return jsonify({"status": "ok"})
 
+
+@app.route("/metrics")
+def metrics():
+    """Prometheus scrape endpoint. Task counts are computed fresh on each scrape."""
+    db = get_db()
+    counts = {s: 0 for s in STATUSES}
+    for r in db.execute("SELECT * FROM tasks").fetchall():
+        counts[compute_status(r["due_at"], r["reminder_offset"], r["completed"])] += 1
+    for status, n in counts.items():
+        TASKS_BY_STATUS.labels(status).set(n)
+    return Response(generate_latest(REGISTRY), mimetype=CONTENT_TYPE_LATEST)
 
 init_db()
 
