@@ -22,3 +22,10 @@ Thumbs.db
 
 # Env secrets (never commit these)
 .env
+
+# Terraform / Ansible (secrets and generated files)
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+*.pem
+ansible/inventory.ini
