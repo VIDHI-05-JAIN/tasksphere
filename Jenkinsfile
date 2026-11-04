@@ -83,7 +83,7 @@ pipeline {
 
                     echo "=== APPLICATION HEALTH ==="
                     curl --retry 10 --retry-delay 5 --retry-connrefused \
-                      -fsS http://localhost/health
+                      -fsS -H "Host: tasksphere.43.204.2.109.nip.io" http://localhost/health
                 '''
             }
         }

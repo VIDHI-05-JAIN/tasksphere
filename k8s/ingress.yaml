@@ -6,7 +6,8 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - http:
+    - host: tasksphere.43.204.2.109.nip.io
+      http:
         paths:
           - path: /
             pathType: Prefix
