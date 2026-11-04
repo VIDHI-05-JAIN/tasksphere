@@ -1,0 +1,177 @@
+---
+- name: Configure TaskSphere EC2 server
+  hosts: tasksphere
+  become: true
+  gather_facts: true
+
+  vars:
+    swap_file_size_mb: 2048
+    jenkins_port: 8080
+
+  tasks:
+    - name: Update apt package cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - openjdk-21-jre
+          - fontconfig
+          - apt-transport-https
+          - software-properties-common
+          - python3-pip
+        state: present
+
+    - name: Install Docker
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Enable Docker service
+      systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add Ubuntu user to Docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+    - name: Install k3s without Traefik
+      shell: curl -sfL https://get.k3s.io | sh -s - server --disable traefik
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Enable k3s service
+      systemd:
+        name: k3s
+        enabled: true
+        state: started
+
+    - name: Wait for Kubernetes API
+      command: kubectl get nodes
+      register: k3s_status
+      retries: 20
+      delay: 10
+      until: k3s_status.rc == 0
+      changed_when: false
+
+    - name: Create Jenkins keyring directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add Jenkins repository key
+      shell: curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key -o /etc/apt/keyrings/jenkins-keyring.asc
+      args:
+        creates: /etc/apt/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+        filename: jenkins
+
+    - name: Refresh apt cache
+      apt:
+        update_cache: true
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Configure Jenkins memory
+      copy:
+        dest: /etc/default/jenkins
+        content: |
+          JAVA_ARGS="-Djava.awt.headless=true"
+          JAVA_OPTS="-Xms256m -Xmx768m"
+        mode: "0644"
+
+    - name: Enable Jenkins service
+      systemd:
+        name: jenkins
+        enabled: true
+        state: started
+
+    - name: Wait for Jenkins port
+      wait_for:
+        port: "{{ jenkins_port }}"
+        delay: 10
+        timeout: 300
+
+    - name: Add Jenkins user to Docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: true
+
+    - name: Create Jenkins Kubernetes directory
+      file:
+        path: /var/lib/jenkins/.kube
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: "0700"
+
+    - name: Copy k3s kubeconfig for Jenkins
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /var/lib/jenkins/.kube/config
+        remote_src: true
+        owner: jenkins
+        group: jenkins
+        mode: "0600"
+
+    - name: Configure Jenkins Kubernetes environment
+      lineinfile:
+        path: /etc/default/jenkins
+        line: 'KUBECONFIG=/var/lib/jenkins/.kube/config'
+        create: true
+
+    - name: Restart Jenkins
+      systemd:
+        name: jenkins
+        state: restarted
+
+    - name: Create swap file
+      command: fallocate -l 2G /swapfile
+      args:
+        creates: /swapfile
+
+    - name: Set swap file permissions
+      file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Format swap file
+      command: mkswap /swapfile
+      when: ansible_swaptotal_mb | int == 0
+
+    - name: Enable swap
+      command: swapon /swapfile
+      when: ansible_swaptotal_mb | int == 0
+
+    - name: Persist swap configuration
+      mount:
+        name: none
+        src: /swapfile
+        fstype: swap
+        opts: sw
+        state: present
+
+    - name: Install CloudWatch Agent package
+      apt:
+        deb: https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+        state: present

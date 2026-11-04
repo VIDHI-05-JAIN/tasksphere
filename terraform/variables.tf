@@ -11,7 +11,7 @@ variable "project" {
 
 variable "instance_type" {
   type    = string
-  default = "t2.medium"
+  default = "c7i-flex.large"
 }
 
 variable "disk_size_gb" {
